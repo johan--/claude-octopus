@@ -1,7 +1,7 @@
 {
   "name": "octo",
-  "version": "8.32.0",
-  "description": "Multi-tentacled orchestrator using Double Diamond methodology. (v8.32.0) Superpowers-Inspired Hardening \u2014 context compaction survival, description trap fixes, HARD-GATE enforcement tags, human-only skill flags, staged review pipeline. 31 expert personas, 46 commands, 50 skills. Commands '/octo:*'. Run /octo:setup for guided setup.",
+  "version": "8.33.0",
+  "description": "Multi-tentacled orchestrator using Double Diamond methodology. (v8.33.0) Superpowers-Inspired Hardening \u2014 context compaction survival, description trap fixes, HARD-GATE enforcement tags, human-only skill flags, staged review pipeline. 31 expert personas, 46 commands, 50 skills. Commands '/octo:*'. Run /octo:setup for guided setup.",
   "author": {
     "name": "nyldn"
   },
@@ -92,7 +92,8 @@
     "./.claude/skills/skill-doctor.md",
     "./.claude/skills/skill-claw.md",
     "./.claude/skills/skill-factory.md",
-    "./.claude/skills/skill-staged-review.md"
+    "./.claude/skills/skill-staged-review.md",
+    "./.claude/skills/skill-ui-ux-design.md"
   ],
   "commands": [
     "./.claude/commands/octo.md",
@@ -142,6 +143,7 @@
     "./.claude/commands/claw.md",
     "./.claude/commands/doctor.md",
     "./.claude/commands/factory.md",
-    "./.claude/commands/staged-review.md"
+    "./.claude/commands/staged-review.md",
+    "./.claude/commands/ui-ux-design.md"
   ]
 }

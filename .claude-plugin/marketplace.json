@@ -11,8 +11,8 @@
     {
       "name": "claude-octopus",
       "source": "./",
-      "description": "v8.32.0 - Marketing, finance, legal personas and IDE integration. 31 personas, 46 commands, 50 skills. Run /octo:setup.",
-      "version": "8.32.0",
+      "description": "v8.33.0 - UI/UX design workflow with BM25 design intelligence. 31 personas, 46 commands, 50 skills. Run /octo:setup.",
+      "version": "8.33.0",
       "author": {
         "name": "nyldn"
       },

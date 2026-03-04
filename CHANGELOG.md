@@ -1,3 +1,11 @@
+## [8.33.0] - 2026-03-04
+
+### Changed
+
+- UI/UX design workflow with BM25 design intelligence
+
+---
+
 ## [8.32.0] - 2026-03-04
 
 ### Changed
