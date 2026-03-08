@@ -52,14 +52,14 @@ AskUserQuestion({
       ]
     },
     {
-      question: "How should findings be validated?",
-      header: "Validation Mode",
+      question: "How should findings be validated? Multi-LLM options use Claude + Codex + Gemini together.",
+      header: "Multi-LLM Validation",
       multiSelect: false,
       options: [
-        {label: "Standard audit", description: "Single-pass security analysis"},
-        {label: "Red team debate", description: "Adversarial red vs blue team debate on each finding (recommended for high-value targets)"},
-        {label: "Full adversarial cycle", description: "4-phase blue→red→remediate→validate with debate at each transition"},
-        {label: "Debate critical findings only", description: "Standard audit, then debate any critical/high severity findings"}
+        {label: "Standard audit", description: "Claude-only security analysis (no external API costs)"},
+        {label: "Multi-LLM red team debate", description: "Codex plays blue team, Gemini plays red team, Claude synthesizes (recommended for high-value targets)"},
+        {label: "Full Multi-LLM adversarial cycle", description: "4-phase blue→red→remediate→validate with three-model debate at each transition"},
+        {label: "Multi-LLM debate on critical findings only", description: "Standard audit, then Claude + Codex + Gemini debate any critical/high severity findings"}
       ]
     }
   ]

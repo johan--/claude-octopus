@@ -342,7 +342,7 @@ AskUserQuestion({
         {label: "Review and execute later", description: "Plan saved, I'll run /octo:embrace when ready (Recommended)"},
         {label: "Adjust plan weights", description: "Change phase emphasis before saving"},
         {label: "Execute now", description: "Run /octo:embrace immediately with this plan"},
-        {label: "Debate the plan first", description: "Run a structured multi-AI debate to stress-test assumptions before executing"},
+        {label: "Multi-LLM debate the plan first", description: "Claude + Codex + Gemini debate the plan's assumptions and risks before executing (uses external API credits)"},
         {label: "Different approach", description: "Suggest an alternative strategy"}
       ]
     }
@@ -366,11 +366,11 @@ AskUserQuestion({
 - Pass the intent contract and phase weights
 - Let embrace workflow handle execution
 
-**If "Debate the plan first":**
-- Invoke `/octo:debate` with the plan as context:
+**If "Multi-LLM debate the plan first":**
+- Invoke `/octo:debate` with the plan as context (Claude + Codex + Gemini deliberate):
   - Topic: "Should we proceed with this plan? What are the risks and blind spots?"
   - `--rounds 2 --debate-style adversarial --context-file .claude/session-plan.md`
-- After debate completes, present the synthesis and return to Step 6
+- After the Multi-LLM debate completes, present the synthesis and return to Step 6
 - If the debate confirms the plan, user can then select "Execute now"
 - If the debate reveals issues, user can select "Adjust plan weights" or "Different approach"
 

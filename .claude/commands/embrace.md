@@ -55,14 +55,14 @@ AskUserQuestion({
       ]
     },
     {
-      question: "Should critical decisions be stress-tested with a multi-AI debate?",
-      header: "Debate Gates",
+      question: "Should critical decisions be stress-tested with a Multi-LLM debate? (Claude + Codex + Gemini deliberate together)",
+      header: "Multi-LLM Debate Gates",
       multiSelect: false,
       options: [
-        {label: "Yes — at Define→Develop gate", description: "Debate the chosen approach before implementing (recommended for Large/Full scope)"},
-        {label: "Yes — at both gates", description: "Debate after Define AND before final Deliver (maximum rigor)"},
-        {label: "No — skip debates", description: "Standard workflow without debate checkpoints"},
-        {label: "Only if disagreement detected", description: "Auto-trigger debate when providers disagree significantly"}
+        {label: "Yes — Multi-LLM debate at Define→Develop gate", description: "Claude, Codex, and Gemini debate the chosen approach before implementing (recommended for Large/Full scope)"},
+        {label: "Yes — Multi-LLM debate at both gates", description: "Three-model debate after Define AND before Deliver (maximum rigor, uses external API credits)"},
+        {label: "No — skip Multi-LLM debates", description: "Standard workflow without multi-model debate checkpoints"},
+        {label: "Only if disagreement detected", description: "Auto-trigger Multi-LLM debate when providers show significant divergence"}
       ]
     }
   ]

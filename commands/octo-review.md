@@ -51,14 +51,14 @@ AskUserQuestion({
       ]
     },
     {
-      question: "Should contentious findings be debated across AI models?",
-      header: "Debate Mode",
+      question: "Should contentious findings be validated with a Multi-LLM debate? (Claude + Codex + Gemini weigh in)",
+      header: "Multi-LLM Debate",
       multiSelect: false,
       options: [
-        {label: "No — standard review", description: "Claude-only review (fastest)"},
-        {label: "Yes — debate architecture decisions", description: "Run a debate on design trade-offs found during review"},
-        {label: "Yes — debate all high-severity findings", description: "Multi-AI deliberation on any critical/high findings"},
-        {label: "Auto — debate if disagreement detected", description: "Only trigger debate when providers would likely disagree"}
+        {label: "No — Claude-only review", description: "Single-model review (fastest, no external API costs)"},
+        {label: "Yes — Multi-LLM debate on architecture decisions", description: "Claude, Codex, and Gemini debate design trade-offs (uses external API credits)"},
+        {label: "Yes — Multi-LLM debate on all high-severity findings", description: "Three-model deliberation on any critical/high findings"},
+        {label: "Auto — Multi-LLM debate if disagreement detected", description: "Only trigger three-model debate when providers would likely disagree"}
       ]
     }
   ]
