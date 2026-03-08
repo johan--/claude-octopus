@@ -190,6 +190,11 @@ if [[ -d "$AGENTS_SRC" ]]; then
     filename="$(basename "$src")"
     agent_name="$(basename "$src" .md)"
 
+    # Factory has no plugin namespacing — prefix with "octo-" so all droids
+    # appear under octo-* (mirrors commands/ prefix convention).
+    out_filename="octo-${filename}"
+    out_name="octo-${agent_name}"
+
     # Extract frontmatter
     frontmatter="$(awk 'BEGIN{c=0} /^---$/{c++; if(c==2) exit; next} c==1{print}' "$src")"
 
@@ -201,16 +206,16 @@ if [[ -d "$AGENTS_SRC" ]]; then
     body="$(awk 'BEGIN{c=0} /^---$/{c++; if(c==2){found=1; next}} found{print}' "$src")"
 
     # Write Factory-compatible droid definition
-    cat > "$DROIDS_OUT/$filename" << DROIDEOF
+    cat > "$DROIDS_OUT/$out_filename" << DROIDEOF
 ---
-name: $agent_name
+name: $out_name
 description: $desc
 model: ${model:-inherit}
 ---
 $body
 DROIDEOF
 
-    echo "  GEN droid: $agent_name"
+    echo "  GEN droid: $out_name"
     droid_count=$((droid_count + 1))
   done
 

@@ -1,5 +1,5 @@
 ---
-name: tdd-orchestrator
+name: octo-tdd-orchestrator
 description: TDD orchestrator enforcing red-green-refactor discipline and test-driven development
 model: opus
 ---

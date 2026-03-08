@@ -1,5 +1,5 @@
 ---
-name: cloud-architect
+name: octo-cloud-architect
 description: Cloud architect for AWS/Azure/GCP infrastructure, IaC, FinOps, and multi-cloud strategies
 model: inherit
 ---

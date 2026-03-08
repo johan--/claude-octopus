@@ -450,19 +450,20 @@ if [[ -d "$DROIDS_DIR" && -d "$AGENTS_DIR" ]]; then
     fi
 fi
 
-# 7.3 Every agent has a corresponding droid
+# 7.3 Every agent has a corresponding droid (with octo- prefix)
 if [[ -d "$DROIDS_DIR" ]]; then
     DROID_SYNC_PASS=true
     for agent_file in "$AGENTS_DIR"/*.md; do
         [[ ! -f "$agent_file" ]] && continue
-        droid_name=$(basename "$agent_file")
+        agent_basename=$(basename "$agent_file")
+        droid_name="octo-${agent_basename}"
         if [[ ! -f "$DROIDS_DIR/$droid_name" ]]; then
-            fail "7.3 Agent '$droid_name' has NO matching droid"
+            fail "7.3 Agent '$agent_basename' has NO matching droid (expected $droid_name)"
             DROID_SYNC_PASS=false
         fi
     done
     if [[ "$DROID_SYNC_PASS" == "true" ]]; then
-        pass "7.3 All agents have matching Factory droids"
+        pass "7.3 All agents have matching Factory droids (octo- prefixed)"
     fi
 fi
 
@@ -491,6 +492,16 @@ if grep -c 'agents/droids\|DROIDS_OUT' "$PLUGIN_ROOT/scripts/build-factory-skill
     pass "7.5 build-factory-skills.sh includes droid generation"
 else
     fail "7.5 build-factory-skills.sh does NOT generate droids"
+fi
+
+# 7.6 All droids use octo- prefix (namespace consistency with commands)
+if [[ -d "$DROIDS_DIR" ]]; then
+    NON_PREFIXED=$(find "$DROIDS_DIR" -name '*.md' ! -name 'octo-*' 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$NON_PREFIXED" -eq 0 ]]; then
+        pass "7.6 All droids use octo- prefix"
+    else
+        fail "7.6 $NON_PREFIXED droids missing octo- prefix"
+    fi
 fi
 
 # ─── Summary ────────────────────────────────────────────────────

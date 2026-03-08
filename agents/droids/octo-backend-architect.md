@@ -1,5 +1,5 @@
 ---
-name: backend-architect
+name: octo-backend-architect
 description: Backend architect for scalable API design, microservices, and distributed systems
 model: inherit
 ---

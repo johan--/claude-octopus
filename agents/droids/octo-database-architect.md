@@ -1,5 +1,5 @@
 ---
-name: database-architect
+name: octo-database-architect
 description: Database architect for data modeling, technology selection, schema design, and migration planning
 model: inherit
 ---

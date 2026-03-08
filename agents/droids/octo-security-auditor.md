@@ -1,5 +1,5 @@
 ---
-name: security-auditor
+name: octo-security-auditor
 description: Security auditor for DevSecOps, OWASP compliance, vulnerability assessment, and threat modeling
 model: opus
 ---

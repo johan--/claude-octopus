@@ -1,5 +1,5 @@
 ---
-name: performance-engineer
+name: octo-performance-engineer
 description: Performance engineer for optimization, observability, and scalable system performance
 model: opus
 ---
