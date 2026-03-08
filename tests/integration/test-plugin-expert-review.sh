@@ -192,8 +192,8 @@ test_commands_structure() {
     assert_dir_exists_custom ".claude/commands" "commands directory exists"
 
     # Verify key commands exist
-    assert_file_exists ".claude/commands/setup.md" "setup command exists"
-    assert_file_exists ".claude/commands/debate.md" "debate command exists"
+    assert_file_exists ".claude/commands/embrace.md" "embrace command exists"
+    assert_file_exists ".claude/commands/discover.md" "discover command exists"
 }
 
 test_gitignore_best_practices() {
