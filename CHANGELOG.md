@@ -1,3 +1,19 @@
+## [8.48.0] - 2026-03-09
+
+### Fixed
+
+- Provider activation reliability: synthesis timeout recovery, claude-sonnet agent capture, model updates
+- Cost estimate placement in embrace workflow (test regression fix)
+
+### Added
+
+- Claude Code v2.1.72 feature sync: 8 new detection flags, effort symbols, cron control
+- Codex OAuth freshness check in preflight
+- `synthesize-probe` recovery command for timeout resilience
+- `OCTOPUS_FORCE_LEGACY_DISPATCH` for reliable claude-sonnet capture
+
+---
+
 ## [8.47.0] - 2026-03-09
 
 ### Changed

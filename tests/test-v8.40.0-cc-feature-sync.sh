@@ -151,10 +151,10 @@ fi
 suite "7. Flag Count"
 
 FLAG_COUNT=$(grep -c '^SUPPORTS_.*=false' "$ORCH")
-if [[ "$FLAG_COUNT" -ge 72 ]]; then
-  pass "Total SUPPORTS_* flags: $FLAG_COUNT (expected >= 72)"
+if [[ "$FLAG_COUNT" -ge 80 ]]; then
+  pass "Total SUPPORTS_* flags: $FLAG_COUNT (expected >= 80)"
 else
-  fail "Total SUPPORTS_* flags: $FLAG_COUNT (expected >= 72)"
+  fail "Total SUPPORTS_* flags: $FLAG_COUNT (expected >= 80)"
 fi
 
 # ─────────────────────────────────────────────────────────────────────

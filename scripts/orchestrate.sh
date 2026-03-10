@@ -414,8 +414,8 @@ check_ux_dependencies() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CLAUDE CODE VERSION DETECTION (v7.12.0, updated v8.34.0)
-# Detects Claude Code v2.1.12+ through v2.1.69+ features.
+# CLAUDE CODE VERSION DETECTION (v7.12.0, updated v8.48.0)
+# Detects Claude Code v2.1.12+ through v2.1.72+ features.
 #
 # Flag usage patterns:
 #   - GATED: Flag is checked in if-conditionals to enable/disable behavior
@@ -496,6 +496,14 @@ SUPPORTS_RENAME_WHILE_PROCESSING=false # v8.40: Claude Code v2.1.70+ (/rename wo
 SUPPORTS_NATIVE_LOOP=false            # v8.40: Claude Code v2.1.71+ (/loop command + cron scheduling tools)
 SUPPORTS_RUNTIME_DEBUG=false          # v8.40: Claude Code v2.1.71+ (/debug toggle mid-session)
 SUPPORTS_FAST_BRIDGE_RECONNECT=false  # v8.40: Claude Code v2.1.71+ (bridge reconnects in seconds, not 10min)
+SUPPORTS_EXIT_WORKTREE=false           # v8.48: Claude Code v2.1.72+ (ExitWorktree tool to leave worktree sessions)
+SUPPORTS_AGENT_MODEL_OVERRIDE=false    # v8.48: Claude Code v2.1.72+ (Agent tool model parameter restored)
+SUPPORTS_EFFORT_REDESIGN=false         # v8.48: Claude Code v2.1.72+ (effort simplified: low/medium/high, max removed, ○◐● symbols)
+SUPPORTS_DISABLE_CRON_ENV=false        # v8.48: Claude Code v2.1.72+ (CLAUDE_CODE_DISABLE_CRON env var)
+SUPPORTS_HIDDEN_HTML_COMMENTS=false    # v8.48: Claude Code v2.1.72+ (HTML comments hidden in auto-injected CLAUDE.md)
+SUPPORTS_BASH_ALLOWLIST_V2=false       # v8.48: Claude Code v2.1.72+ (lsof/pgrep/tput/ss/fd/fdfind auto-allowed)
+SUPPORTS_CLEAR_PRESERVES_BG=false      # v8.48: Claude Code v2.1.72+ (/clear no longer kills background tasks)
+SUPPORTS_TEAM_MODEL_INHERIT_FIX=false  # v8.48: Claude Code v2.1.72+ (team agents inherit leader model fix)
 SUPPORTS_CONTINUATION=false           # v8.30: Agent resume/continuation for iterative retries
 OCTOPUS_BACKEND="api"              # v8.16: Detected backend (api|bedrock|vertex|foundry)
 AGENT_TEAMS_ENABLED="${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-0}"
@@ -736,6 +744,18 @@ detect_claude_code_version() {
         SUPPORTS_FAST_BRIDGE_RECONNECT=true
     fi
 
+    # Check for v2.1.72+ features (ExitWorktree, Agent model override, effort redesign, cron disable env)
+    if version_compare "$CLAUDE_CODE_VERSION" "2.1.72" ">="; then
+        SUPPORTS_EXIT_WORKTREE=true
+        SUPPORTS_AGENT_MODEL_OVERRIDE=true
+        SUPPORTS_EFFORT_REDESIGN=true
+        SUPPORTS_DISABLE_CRON_ENV=true
+        SUPPORTS_HIDDEN_HTML_COMMENTS=true
+        SUPPORTS_BASH_ALLOWLIST_V2=true
+        SUPPORTS_CLEAR_PRESERVES_BG=true
+        SUPPORTS_TEAM_MODEL_INHERIT_FIX=true
+    fi
+
     log "INFO" "Claude Code v$CLAUDE_CODE_VERSION detected"
     log "INFO" "Task Management: $SUPPORTS_TASK_MANAGEMENT | Fork Context: $SUPPORTS_FORK_CONTEXT | Agent Teams: $SUPPORTS_AGENT_TEAMS"
     log "INFO" "Persistent Memory: $SUPPORTS_PERSISTENT_MEMORY | Hook Events: $SUPPORTS_HOOK_EVENTS | Agent Type Routing: $SUPPORTS_AGENT_TYPE_ROUTING"
@@ -756,6 +776,9 @@ detect_claude_code_version() {
     log "INFO" "Statusline Worktree: $SUPPORTS_STATUSLINE_WORKTREE | Reload Plugins: $SUPPORTS_RELOAD_PLUGINS | Disable Git Instructions: $SUPPORTS_DISABLE_GIT_INSTRUCTIONS"
     log "INFO" "VSCode Plan: $SUPPORTS_VSCODE_PLAN_VIEW | Image Compaction: $SUPPORTS_IMAGE_CACHE_COMPACTION | Rename While Processing: $SUPPORTS_RENAME_WHILE_PROCESSING"
     log "INFO" "Native Loop: $SUPPORTS_NATIVE_LOOP | Runtime Debug: $SUPPORTS_RUNTIME_DEBUG | Fast Bridge: $SUPPORTS_FAST_BRIDGE_RECONNECT"
+    log "INFO" "Exit Worktree: $SUPPORTS_EXIT_WORKTREE | Agent Model Override: $SUPPORTS_AGENT_MODEL_OVERRIDE | Effort Redesign: $SUPPORTS_EFFORT_REDESIGN"
+    log "INFO" "Disable Cron Env: $SUPPORTS_DISABLE_CRON_ENV | Hidden HTML Comments: $SUPPORTS_HIDDEN_HTML_COMMENTS | Bash Allowlist V2: $SUPPORTS_BASH_ALLOWLIST_V2"
+    log "INFO" "Clear Preserves BG: $SUPPORTS_CLEAR_PRESERVES_BG | Team Model Inherit Fix: $SUPPORTS_TEAM_MODEL_INHERIT_FIX"
 
     # v8.29.0: Context window control
     OCTOPUS_CONTEXT_WINDOW="${OCTOPUS_CONTEXT_WINDOW:-auto}"
@@ -1361,7 +1384,7 @@ get_tier_model() {
 
     case "$agent_type" in
         codex-spark)  # v8.9.0: Spark always uses spark model
-            echo "gpt-5.3-codex-spark"
+            echo "gpt-5.4-codex-spark"
             ;;
         codex-reasoning)  # v8.9.0: Reasoning tier
             case "$tier" in
@@ -1381,10 +1404,10 @@ get_tier_model() {
             ;;
         codex*)
             case "$tier" in
-                budget)   echo "gpt-5.1-codex-mini" ;;
-                standard) echo "gpt-5.2-codex" ;;
-                premium)  echo "gpt-5.3-codex" ;;
-                *)        echo "gpt-5.2-codex" ;;
+                budget)   echo "gpt-5-codex-mini" ;;
+                standard) echo "gpt-5.4" ;;
+                premium)  echo "gpt-5.4" ;;
+                *)        echo "gpt-5.4" ;;
             esac
             ;;
         gemini*)
@@ -1886,11 +1909,11 @@ select_codex_model_for_context() {
     # Priority 2: Task hint override (explicit caller request)
     case "$task_hint" in
         fast|spark)
-            echo "gpt-5.3-codex-spark"
+            echo "gpt-5.4-codex-spark"
             return 0
             ;;
         deep|complex|security)
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             return 0
             ;;
         large-codebase|large-context)
@@ -1922,36 +1945,36 @@ select_codex_model_for_context() {
     case "$phase" in
         discover|probe|research)
             # Research needs deep analysis → full codex
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
         define|grasp)
             # Requirements analysis needs precision → full codex
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
         develop|tangle)
             # Implementation needs capability → full codex
             # (Users can override to spark for iteration via config)
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
         deliver|ink|review)
             # Code review benefits from fast feedback → spark
-            echo "gpt-5.3-codex-spark"
+            echo "gpt-5.4-codex-spark"
             ;;
         quick)
             # Quick tasks prioritize speed → spark
-            echo "gpt-5.3-codex-spark"
+            echo "gpt-5.4-codex-spark"
             ;;
         debate)
             # Debate needs deep reasoning for arguments → full codex
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
         security)
             # Security audits need thorough analysis → full codex
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
         *)
             # Default to full codex for unknown phases
-            echo "gpt-5.3-codex"
+            echo "gpt-5.4"
             ;;
     esac
 }
@@ -5715,6 +5738,7 @@ ${YELLOW}═══════════════════════�
   define <prompt>         Phase 2: Consensus building (alias: grasp)
   develop <prompt>        Phase 3: Implementation + validation (alias: tangle)
   deliver <prompt>        Phase 4: Final quality gates (alias: ink)
+  synthesize-probe [id]  Synthesize probe results (timeout recovery)
 
 ${CYAN}═══════════════════════════════════════════════════════════════════════════${NC}
 ${CYAN}ADVANCED ORCHESTRATION${NC}
@@ -9631,13 +9655,13 @@ complete_session() {
 get_role_mapping() {
     local role="$1"
     case "$role" in
-        architect)    echo "codex:gpt-5.3-codex" ;;            # System design, planning (v8.3: GPT-5.3-Codex)
+        architect)    echo "codex:gpt-5.4" ;;                  # System design, planning (v8.48: GPT-5.4)
         researcher)   echo "gemini:gemini-3-pro-preview" ;;   # Deep investigation
-        reviewer)     echo "codex-review:gpt-5.3-codex" ;;    # Code review, validation (v8.3: GPT-5.3-Codex)
-        implementer)  echo "codex:gpt-5.3-codex" ;;           # Code generation (v8.3: GPT-5.3-Codex)
+        reviewer)     echo "codex-review:gpt-5.4" ;;          # Code review, validation (v8.48: GPT-5.4)
+        implementer)  echo "codex:gpt-5.4" ;;                 # Code generation (v8.48: GPT-5.4)
         synthesizer)  echo "claude:claude-sonnet-4.6" ;;      # Result aggregation (v8.17: Sonnet 4.6)
         strategist)   echo "claude-opus:claude-opus-4.6" ;;   # Premium synthesis (v8.0: Opus 4.6)
-        *)            echo "codex:gpt-5.3-codex" ;;           # Default (v8.3: GPT-5.3-Codex)
+        *)            echo "codex:gpt-5.4" ;;                 # Default (v8.48: GPT-5.4)
     esac
 }
 
@@ -10650,6 +10674,15 @@ OCTOPUS_AGENT_TEAMS="${OCTOPUS_AGENT_TEAMS:-auto}"  # auto | native | legacy
 should_use_agent_teams() {
     local agent_type="$1"
 
+    # P0-B fix: When orchestrate.sh runs as a Bash tool subprocess (not inside
+    # Claude Code's native context), Agent Teams JSON instruction files are never
+    # picked up and SubagentStop hooks never fire.  Probe phase sets this flag
+    # before spawning agents in parallel background subshells.
+    if [[ "${OCTOPUS_FORCE_LEGACY_DISPATCH:-}" == "true" ]]; then
+        log "DEBUG" "Force legacy dispatch active — skipping Agent Teams for $agent_type"
+        return 1
+    fi
+
     # User override: force legacy mode
     if [[ "$OCTOPUS_AGENT_TEAMS" == "legacy" ]]; then
         return 1
@@ -11027,7 +11060,18 @@ ${earned_skills_ctx}"
             log "DEBUG" "Effort level: $effort_level (phase=${phase:-unknown})"
             # v8.40.0: Display effort level in agent spawn output when supported
             if [[ "$SUPPORTS_EFFORT_CALLOUT" == "true" ]]; then
-                log "USER" "  Effort: $effort_level"
+                # v8.48.0: Use v2.1.72 effort symbols when available
+                local effort_symbol=""
+                if [[ "$SUPPORTS_EFFORT_REDESIGN" == "true" ]]; then
+                    case "$effort_level" in
+                        low) effort_symbol="○" ;;
+                        medium) effort_symbol="◐" ;;
+                        high) effort_symbol="●" ;;
+                    esac
+                    log "USER" "  Effort: ${effort_symbol} ${effort_level}"
+                else
+                    log "USER" "  Effort: $effort_level"
+                fi
             fi
         fi
     fi
@@ -11088,10 +11132,12 @@ ${earned_skills_ctx}"
                 --arg prompt "$enhanced_prompt" \
                 --arg result_file "$result_file" \
                 --arg effort "${effort_level:-medium}" \
+                --arg model_override "$SUPPORTS_AGENT_MODEL_OVERRIDE" \
                 '{agent_type: $agent_type, task_id: $task_id, role: $role,
                   phase: $phase, model: $model, prompt: $prompt,
                   result_file: $result_file, dispatch_method: "agent_teams",
                   effort: $effort,
+                  model_override_supported: ($model_override == "true"),
                   agent_id: "", dispatched_at: now | todate}' \
                 > "$agent_instruction_file" 2>/dev/null
         fi
@@ -12201,6 +12247,12 @@ validate_agent_type() {
 
 parallel_execute() {
     local tasks_file="${1:-$TASKS_FILE}"
+
+    # v8.48.0: Disable cron during parallel execution to prevent interference
+    if [[ "$SUPPORTS_DISABLE_CRON_ENV" == "true" ]]; then
+        export CLAUDE_CODE_DISABLE_CRON=1
+        log DEBUG "Cron jobs disabled for parallel execution duration"
+    fi
 
     if [[ ! -f "$tasks_file" ]]; then
         log ERROR "Tasks file not found: $tasks_file"
@@ -13368,6 +13420,54 @@ preflight_cache_invalidate() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# CODEX OAUTH TOKEN FRESHNESS CHECK (P1-A)
+# Pre-probe check that warns if OAuth token is expired or about to expire
+# ═══════════════════════════════════════════════════════════════════════════════
+
+check_codex_auth_freshness() {
+    local auth_file="$HOME/.codex/auth.json"
+
+    # Skip if no auth file (API key auth or no codex — handled elsewhere)
+    [[ -f "$auth_file" ]] || return 0
+
+    local expires_at=""
+
+    # Parse token expiry: prefer jq, fall back to grep
+    if command -v jq &>/dev/null; then
+        expires_at=$(jq -r '.expires_at // .expiry // empty' "$auth_file" 2>/dev/null || true)
+    fi
+
+    # grep fallback if jq unavailable or returned empty
+    if [[ -z "$expires_at" ]]; then
+        # Handles both "expires_at" and "expiry" keys, numeric or quoted values
+        expires_at=$(grep -oE '"(expires_at|expiry)"\s*:\s*"?([0-9]+)"?' "$auth_file" 2>/dev/null \
+            | head -1 | grep -oE '[0-9]+' | tail -1 || true)
+    fi
+
+    # If we couldn't parse expiry, skip silently (don't block workflows)
+    [[ -n "$expires_at" ]] || return 0
+
+    local current_time
+    current_time=$(date +%s)
+    local remaining=$((expires_at - current_time))
+
+    if [[ $remaining -le 0 ]]; then
+        log ERROR "Codex OAuth token is EXPIRED (expired $((-remaining))s ago)"
+        echo -e "  ${RED}✗${NC} Codex OAuth token expired. Run ${CYAN}codex auth${NC} to refresh."
+        return 1
+    elif [[ $remaining -le 600 ]]; then
+        # Token expires within 10 minutes
+        local mins_remaining=$((remaining / 60))
+        log WARN "Codex OAuth token expires in ${mins_remaining}m. Run 'codex auth' to refresh."
+        echo -e "  ${YELLOW}⚠${NC} Codex OAuth token expires in ${mins_remaining}m. Run ${CYAN}codex auth${NC} to refresh."
+    else
+        log DEBUG "Codex OAuth token valid (expires in $((remaining / 60))m)"
+    fi
+
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # PROVIDER SMOKE TEST (v8.19.0 - Issue #34)
 # Fast parallel test that catches real provider failures before workflow starts
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -13441,7 +13541,7 @@ _display_smoke_test_error() {
         MODEL_NOT_FOUND)
             echo -e "  ${RED}✗${NC} ${provider}: Model '${model}' not available"
             if [[ "$provider" == "codex" ]]; then
-                echo -e "    ${DIM}Fix: export OCTOPUS_CODEX_MODEL=gpt-5.3-codex${NC}"
+                echo -e "    ${DIM}Fix: export OCTOPUS_CODEX_MODEL=gpt-5.4${NC}"
             else
                 echo -e "    ${DIM}Fix: export OCTOPUS_GEMINI_MODEL=gemini-3-pro-preview${NC}"
             fi
@@ -13740,6 +13840,21 @@ preflight_check() {
     [[ "$codex_auth" == "true" ]] && available_providers="${available_providers}Codex "
     [[ "$gemini_auth" == "true" ]] && available_providers="${available_providers}Gemini "
     log INFO "Available providers: $available_providers"
+
+    # v8.48: Codex OAuth token freshness check (P1-A)
+    # Warn early if token is expired/expiring — saves a failed smoke test round-trip
+    if [[ "$codex_auth" == "true" ]]; then
+        if ! check_codex_auth_freshness; then
+            # Token expired but Gemini may still work — degrade gracefully
+            if [[ "$gemini_auth" == "true" ]]; then
+                log WARN "Codex OAuth expired; continuing with Gemini only"
+            else
+                log ERROR "Codex OAuth expired and no other authenticated provider"
+                preflight_cache_write "1"
+                return 1
+            fi
+        fi
+    fi
 
     # Check Claude CLI (optional - for grapple/squeeze)
     if command -v claude &>/dev/null; then
@@ -15392,6 +15507,12 @@ probe_discover() {
     # Initialize progress tracking with actual agent count (dynamic, may be 5, 6, or 7)
     init_progress_tracking "discover" "${#perspectives[@]}"
 
+    # P0-B fix: Force legacy (bash CLI) dispatch for probe-phase agents.
+    # orchestrate.sh runs as a Bash tool subprocess, so Agent Teams JSON
+    # instruction files are never picked up by Claude Code's native dispatcher
+    # and SubagentStop hooks never fire, leaving result files empty.
+    export OCTOPUS_FORCE_LEGACY_DISPATCH=true
+
     local pids=()
     for i in "${!perspectives[@]}"; do
         local perspective="${perspectives[$i]}"
@@ -15410,6 +15531,8 @@ probe_discover() {
         fi
         sleep 0.1
     done
+
+    unset OCTOPUS_FORCE_LEGACY_DISPATCH
 
     log INFO "Spawned ${#pids[@]} parallel research threads"
 
@@ -15521,8 +15644,25 @@ probe_discover() {
     fi
     echo ""
 
+    # v8.48.0: Write synthesis marker before attempting synthesis
+    # WHY: The Bash tool's 120s timeout frequently kills the process during
+    # the Gemini synthesis call (~30-60s) that follows ~60-90s of agent work.
+    # This marker lets the user recover by running `synthesize-probe <task_group>`.
+    local synthesis_marker="${RESULTS_DIR}/probe-needs-synthesis-${task_group}.marker"
+    {
+        echo "task_group=${task_group}"
+        printf 'prompt=%q\n' "$(printf '%s' "$prompt" | head -c 4096)"
+        echo "usable_results=${usable_results}"
+        echo "timestamp=$(date -Iseconds)"
+    } > "$synthesis_marker"
+    log DEBUG "Synthesis marker written: $synthesis_marker"
+
     # Intelligent synthesis (v7.19.0 P1.1: allow with partial results)
     synthesize_probe_results "$task_group" "$prompt" "$usable_results"
+
+    # Synthesis succeeded — remove the marker
+    rm -f "$synthesis_marker"
+    log DEBUG "Synthesis marker removed (synthesis completed successfully)"
 
     # v7.19.0 P2.4: Stop progressive synthesis monitor
     if [[ -n "$synthesis_monitor_pid" ]]; then
@@ -16308,6 +16448,15 @@ embrace_full_workflow() {
 
     log INFO "Starting complete Double Diamond workflow"
 
+    # v8.5: Show compact cost estimate in banner
+    show_cost_estimate "embrace" "${#prompt}"
+
+    # v8.48.0: Disable cron during long multi-phase workflows to prevent interference
+    if [[ "$SUPPORTS_DISABLE_CRON_ENV" == "true" ]]; then
+        export CLAUDE_CODE_DISABLE_CRON=1
+        log DEBUG "Cron jobs disabled for embrace workflow duration"
+    fi
+
     # v8.19.0: Cleanup expired checkpoints
     cleanup_expired_checkpoints 2>/dev/null || true
 
@@ -16369,9 +16518,6 @@ ${obs_ctx}"
 
     _write_embrace_session_state "init" "starting"
     echo ""
-
-    # v8.5: Show compact cost estimate in banner
-    show_cost_estimate "embrace" "${#prompt}"
 
     if [[ "$DRY_RUN" == "true" ]]; then
         log INFO "[DRY-RUN] Would embrace: $prompt"
@@ -16486,6 +16632,7 @@ ${obs_ctx}"
         unset OCTOPUS_TASK_GROUP
         unset OCTOPUS_TOTAL_PHASES
         unset OCTOPUS_COMPLETED_PHASES
+        unset CLAUDE_CODE_DISABLE_CRON 2>/dev/null || true
         return 0
     fi
 
@@ -16666,6 +16813,7 @@ ${obs_ctx}"
     unset OCTOPUS_TASK_GROUP
     unset OCTOPUS_TOTAL_PHASES
     unset OCTOPUS_COMPLETED_PHASES
+    unset CLAUDE_CODE_DISABLE_CRON 2>/dev/null || true
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -19842,6 +19990,127 @@ case "$COMMAND" in
             exit 1
         fi
         embrace_full_workflow "$*"
+        ;;
+    synthesize-probe)
+        # v8.48.0: Standalone probe synthesis — recovers from Bash tool timeout
+        # WHY: probe spawns 5+ agents (~60-90s) then runs Gemini synthesis (~30-60s),
+        # frequently exceeding the Bash tool's 120s timeout. This command lets the
+        # user synthesize already-collected probe results independently.
+        if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+            echo "Synthesize Probe Results — Standalone synthesis for timed-out probes"
+            echo ""
+            echo "Usage: $(basename "$0") synthesize-probe [<task_group>] [<prompt>]"
+            echo ""
+            echo "Arguments:"
+            echo "  task_group   The probe task group ID (timestamp). If omitted, uses most recent."
+            echo "  prompt       The original probe prompt. If omitted, reads from marker file."
+            echo ""
+            echo "Examples:"
+            echo "  $(basename "$0") synthesize-probe                    # Auto-detect most recent"
+            echo "  $(basename "$0") synthesize-probe 1741234567         # Specific task group"
+            echo "  $(basename "$0") synthesize-probe 1741234567 \"How do we implement caching?\""
+            echo ""
+            echo "This command is designed to be called after 'probe' times out."
+            echo "Probe results persist (written by subprocesses) even when the parent"
+            echo "process is killed. This command synthesizes those existing results."
+            exit 0
+        fi
+
+        mkdir -p "$RESULTS_DIR" "$LOGS_DIR"
+
+        synth_task_group="${1:-}"
+        synth_prompt="${2:-}"
+
+        # Auto-detect task group and prompt from marker files if not provided
+        if [[ -z "$synth_task_group" ]]; then
+            # Find the most recent marker file
+            latest_marker=$(ls -t "$RESULTS_DIR"/probe-needs-synthesis-*.marker 2>/dev/null | head -1)
+
+            if [[ -n "$latest_marker" && -f "$latest_marker" ]]; then
+                # shellcheck disable=SC1090
+                source "$latest_marker"
+                synth_task_group="${task_group:-}"
+                synth_prompt="${prompt:-}"
+                log INFO "Auto-detected from marker: task_group=$synth_task_group"
+            fi
+
+            # If still no task group, find most recent probe results
+            if [[ -z "$synth_task_group" ]]; then
+                latest_result=$(ls -t "$RESULTS_DIR"/*-probe-*-*.md 2>/dev/null | head -1)
+                if [[ -n "$latest_result" ]]; then
+                    # Extract task_group from filename pattern: agent-probe-TASKGROUP-N.md
+                    synth_task_group=$(basename "$latest_result" | sed -E 's/.*-probe-([0-9]+)-.*/\1/')
+                    log INFO "Auto-detected from results: task_group=$synth_task_group"
+                fi
+            fi
+        elif [[ -z "$synth_prompt" ]]; then
+            # Task group provided but no prompt — try marker file
+            marker_file="${RESULTS_DIR}/probe-needs-synthesis-${synth_task_group}.marker"
+            if [[ -f "$marker_file" ]]; then
+                # shellcheck disable=SC1090
+                source "$marker_file"
+                synth_prompt="${prompt:-}"
+                log INFO "Prompt recovered from marker file"
+            fi
+        fi
+
+        if [[ -z "$synth_task_group" ]]; then
+            log ERROR "No probe results found to synthesize"
+            echo ""
+            echo "No pending probe results detected. Run a probe first:"
+            echo "  $(basename "$0") probe \"your research question\""
+            echo ""
+            echo "Then if it times out, run:"
+            echo "  $(basename "$0") synthesize-probe"
+            exit 1
+        fi
+
+        # Count available results for this task group
+        synth_result_count=0
+        for result in "$RESULTS_DIR"/*-probe-${synth_task_group}-*.md; do
+            [[ -f "$result" ]] || continue
+            fsize=$(wc -c < "$result" 2>/dev/null || echo "0")
+            [[ $fsize -gt 500 ]] && ((synth_result_count++)) || true
+        done
+
+        if [[ $synth_result_count -eq 0 ]]; then
+            log ERROR "No usable probe results found for task group: $synth_task_group"
+            echo "Results directory: $RESULTS_DIR"
+            echo "Expected files matching: *-probe-${synth_task_group}-*.md"
+            exit 1
+        fi
+
+        # Check if synthesis already exists
+        existing_synthesis="${RESULTS_DIR}/probe-synthesis-${synth_task_group}.md"
+        if [[ -f "$existing_synthesis" ]]; then
+            existing_size=$(wc -c < "$existing_synthesis" 2>/dev/null || echo "0")
+            if [[ $existing_size -gt 500 ]]; then
+                echo ""
+                echo -e "${GREEN}Synthesis already exists${NC}: $existing_synthesis ($(numfmt --to=iec-i --suffix=B $existing_size 2>/dev/null || echo "${existing_size}B"))"
+                echo "To force re-synthesis, delete it first:"
+                echo "  rm \"$existing_synthesis\""
+                exit 0
+            fi
+        fi
+
+        echo ""
+        echo -e "${MAGENTA}╔═══════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${MAGENTA}║  ${GREEN}PROBE SYNTHESIS${MAGENTA} - Standalone synthesis recovery         ║${NC}"
+        echo -e "${MAGENTA}║  Synthesizing $synth_result_count probe results (task: ${synth_task_group})       ${MAGENTA}║${NC}"
+        echo -e "${MAGENTA}╚═══════════════════════════════════════════════════════════╝${NC}"
+        echo ""
+
+        if [[ -z "$synth_prompt" ]]; then
+            synth_prompt="[prompt not available — synthesize from collected probe results]"
+            log WARN "Original prompt not available; synthesis will work from result content only"
+        fi
+
+        log INFO "Synthesizing probe results: task_group=$synth_task_group, results=$synth_result_count"
+        synthesize_probe_results "$synth_task_group" "$synth_prompt" "$synth_result_count"
+
+        # Clean up marker file on success
+        rm -f "${RESULTS_DIR}/probe-needs-synthesis-${synth_task_group}.marker"
+        log INFO "Synthesis complete, marker cleaned up"
         ;;
     factory|dark-factory)
         # Dark Factory: spec-in, software-out autonomous pipeline (v8.25.0)
