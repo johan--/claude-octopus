@@ -119,8 +119,8 @@ test_mcp_correct_command_mapping() {
     else
         ok=false
     fi
-    # review maps to codex-review, not "review"
-    if grep -q '"codex-review"' "$src"; then
+    # review maps to code-review (v8.50.0 redesign from codex-review)
+    if grep -q '"code-review"' "$src"; then
         : # correct
     else
         ok=false
@@ -129,7 +129,7 @@ test_mcp_correct_command_mapping() {
     if $ok; then
         test_pass
     else
-        test_fail "MCP server uses wrong command names (should use grapple/squeeze/codex-review)"
+        test_fail "MCP server uses wrong command names (should use grapple/squeeze/code-review)"
     fi
 }
 
@@ -241,7 +241,7 @@ test_openclaw_correct_command_mapping() {
     local ok=true
     if ! grep -q '"grapple"' "$src"; then ok=false; fi
     if ! grep -q '"squeeze"' "$src"; then ok=false; fi
-    if ! grep -q '"codex-review"' "$src"; then ok=false; fi
+    if ! grep -q '"code-review"' "$src"; then ok=false; fi
 
     if $ok; then
         test_pass

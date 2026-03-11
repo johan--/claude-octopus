@@ -11,8 +11,8 @@
     {
       "name": "claude-octopus",
       "source": "./",
-      "description": "v8.49.1 - Fix /octo:setup command name mismatch. 32 personas, 38 commands, 50 skills. Run /octo:setup.",
-      "version": "8.49.1",
+      "description": "v8.50.0 - Multi-LLM /octo:review \u2014 3-round parallel fleet (Codex + Gemini + Claude + Perplexity), inline PR comments, REVIEW.md support, verified findings. 32 personas, 38 commands, 50 skills. Run /octo:setup.",
+      "version": "8.50.0",
       "author": {
         "name": "nyldn"
       },

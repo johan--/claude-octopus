@@ -7901,6 +7901,442 @@ list_pending_reviews() {
     echo ""
 }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# CODE REVIEW PIPELINE (v8.50.0)
+# review_run() — multi-LLM competitor to CC Code Review managed service
+# ═══════════════════════════════════════════════════════════════════════════
+
+# parse_review_md: reads REVIEW.md from repo root, outputs directive vars
+# WHY: CC Code Review supports REVIEW.md for customization; we match that
+# convention so repos already configured for CC work with /octo:review too.
+parse_review_md() {
+    local repo_root="${1:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+    local review_md="$repo_root/REVIEW.md"
+
+    REVIEW_ALWAYS_CHECK=""
+    REVIEW_STYLE_RULES=""
+    REVIEW_SKIP_PATTERNS=""
+
+    [[ ! -f "$review_md" ]] && return 0
+
+    local section=""
+    while IFS= read -r line; do
+        case "$line" in
+            "## Always check"|"## Always Check") section="always" ;;
+            "## Style")                          section="style" ;;
+            "## Skip")                           section="skip" ;;
+            "## "*)                              section="" ;;
+            "- "*)
+                local item="${line#- }"
+                case "$section" in
+                    always) REVIEW_ALWAYS_CHECK+="${item}"$'\n' ;;
+                    style)  REVIEW_STYLE_RULES+="${item}"$'\n' ;;
+                    skip)   REVIEW_SKIP_PATTERNS+="${item}"$'\n' ;;
+                esac
+                ;;
+        esac
+    done < "$review_md"
+
+    log DEBUG "parse_review_md: always=$(echo "$REVIEW_ALWAYS_CHECK" | wc -l) style=$(echo "$REVIEW_STYLE_RULES" | wc -l) skip=$(echo "$REVIEW_SKIP_PATTERNS" | wc -l)"
+}
+
+# build_review_fleet: builds active agent list based on available providers
+# WHY: fleet is dynamic — if Perplexity is not configured, fall back to
+# Gemini search; if Codex is unavailable, fall back to claude-sonnet.
+# Returns a newline-separated list of "agent_type:role:specialty" triples.
+# NOTE: Uses command -v for provider detection — safe with set -euo pipefail.
+build_review_fleet() {
+    local fleet=""
+
+    # logic-reviewer: Codex (correctness/logic) → claude-sonnet fallback
+    if command -v codex >/dev/null 2>&1; then
+        fleet+="codex:logic-reviewer:correctness and logic bugs, edge cases, regressions"$'\n'
+    else
+        fleet+="claude-sonnet:logic-reviewer:correctness and logic bugs, edge cases, regressions"$'\n'
+    fi
+
+    # security-reviewer: Gemini (security/OWASP) → claude-sonnet fallback
+    if command -v gemini >/dev/null 2>&1; then
+        fleet+="gemini:security-reviewer:OWASP vulnerabilities, injection, auth flaws, data exposure"$'\n'
+    else
+        fleet+="claude-sonnet:security-reviewer:OWASP vulnerabilities, injection, auth flaws, data exposure"$'\n'
+    fi
+
+    # arch-reviewer: claude-sonnet (always available)
+    fleet+="claude-sonnet:arch-reviewer:architecture, integration, API contracts, breaking changes"$'\n'
+
+    # cve-reviewer: Perplexity → Gemini search → claude WebSearch → skip
+    if command -v perplexity >/dev/null 2>&1 || [[ -n "${PERPLEXITY_API_KEY:-}" ]]; then
+        fleet+="perplexity:cve-reviewer:known CVEs, library advisories, live web search"$'\n'
+    elif command -v gemini >/dev/null 2>&1; then
+        fleet+="gemini:cve-reviewer:known CVEs via web search, library advisories"$'\n'
+        log INFO "CVE lookup: Perplexity unavailable, using Gemini search"
+    else
+        fleet+="claude-sonnet:cve-reviewer:known CVEs via WebSearch tool, library advisories"$'\n'
+        log WARN "CVE lookup: no dedicated web-search provider, using Claude WebSearch (degraded)"
+    fi
+
+    echo "$fleet"
+}
+
+# review_run: canonical 3-round multi-LLM code review pipeline
+# WHY: replaces the single-model "codex exec review" dispatch with a
+# parallel fleet (Round 1) + verification (Round 2) + synthesis (Round 3)
+# that competes with CC Code Review's managed service.
+#
+# Args: JSON profile string with fields:
+#   target, focus, provenance, autonomy, publish, debate
+review_run() {
+    local profile_json="${1:-{}}"
+
+    # Parse profile fields (with defaults)
+    local target focus provenance autonomy publish debate
+    target=$(echo "$profile_json"     | jq -r '.target     // "staged"')
+    focus=$(echo "$profile_json"      | jq -r '.focus      // ["correctness"]  | join(",")')
+    provenance=$(echo "$profile_json" | jq -r '.provenance // "unknown"')
+    autonomy=$(echo "$profile_json"   | jq -r '.autonomy   // "supervised"')
+    publish=$(echo "$profile_json"    | jq -r '.publish    // "ask"')
+    debate=$(echo "$profile_json"     | jq -r '.debate     // "auto"')
+
+    local timestamp
+    timestamp=$(date +%s)
+    local results_dir="${RESULTS_DIR:-$HOME/.claude-octopus/results}"
+    # Sync RESULTS_DIR global so spawn_agent writes to the same directory
+    RESULTS_DIR="$results_dir"
+    local findings_file="$results_dir/review-findings-${timestamp}.json"
+    mkdir -p "$results_dir"
+
+    log INFO "review_run: target=$target focus=$focus provenance=$provenance autonomy=$autonomy"
+
+    # ── REVIEW.md ────────────────────────────────────────────────────────────
+    parse_review_md
+    local review_context=""
+    if [[ -n "$REVIEW_ALWAYS_CHECK" || -n "$REVIEW_STYLE_RULES" ]]; then
+        review_context="Repository review rules (from REVIEW.md):\nAlways check:\n${REVIEW_ALWAYS_CHECK}\nStyle:\n${REVIEW_STYLE_RULES}"
+    fi
+
+    # ── Collect diff ─────────────────────────────────────────────────────────
+    local diff_content=""
+    case "$target" in
+        staged)       diff_content=$(git diff --cached 2>/dev/null || true) ;;
+        working-tree) diff_content=$(git diff 2>/dev/null || true) ;;
+        [0-9]*)       diff_content=$(gh pr diff "$target" 2>/dev/null || true) ;;
+        *)            diff_content=$(git diff HEAD -- "$target" 2>/dev/null || true) ;;
+    esac
+
+    if [[ -z "$diff_content" ]]; then
+        log WARN "review_run: no diff found for target=$target"
+        echo '{"findings":[],"message":"No changes found to review"}' > "$findings_file"
+        render_terminal_report "$findings_file"
+        return 0
+    fi
+
+    # Apply skip patterns from REVIEW.md (pre-filter before spending tokens)
+    if [[ -n "$REVIEW_SKIP_PATTERNS" ]]; then
+        while IFS= read -r pattern; do
+            [[ -z "$pattern" ]] && continue
+            diff_content=$(echo "$diff_content" | grep -v "$pattern" || true)
+        done <<< "$REVIEW_SKIP_PATTERNS"
+    fi
+
+    # ── ROUND 1: Parallel agent fleet ────────────────────────────────────────
+    log INFO "review_run: Round 1 — parallel specialist fleet"
+    local fleet
+    fleet=$(build_review_fleet)
+
+    local agent_prompt_base
+    agent_prompt_base="You are a code reviewer. Review the following diff and return ONLY a JSON object with a 'findings' array.
+
+Each finding must have: file (string), line (integer), severity (normal|nit|pre-existing), category (string), title (string), detail (string), confidence (0.0-1.0).
+
+Severity guide:
+- normal: bug that should be fixed before merging (red)
+- nit: minor issue, not blocking (yellow)
+- pre-existing: bug not introduced by this PR (purple)
+
+${review_context}
+
+Focus areas for this review: ${focus}
+Provenance: ${provenance}
+$(if [[ "$provenance" == "autonomous" || "$provenance" == "ai-assisted" ]]; then echo "ELEVATED RIGOR: Check for TDD evidence, placeholder logic, unwired components, speculative abstractions."; fi)
+$(if [[ "$autonomy" == "autonomous" ]]; then echo "AUTONOMOUS MODE: Apply maximum rigor. Flag every potential issue with full detail."; fi)
+
+Diff to review:
+\`\`\`
+${diff_content}
+\`\`\`
+
+Return ONLY valid JSON. No prose, no markdown fences."
+
+    local round1_files=()
+    local round1_agent_types=()
+    while IFS=: read -r agent_type role specialty; do
+        [[ -z "$agent_type" ]] && continue
+        local task_id="review-r1-${role}-${timestamp}"
+        # Use spawn_agent's actual output path convention: ${RESULTS_DIR}/${agent_type}-${task_id}.md
+        local result_file="${RESULTS_DIR}/${agent_type}-${task_id}.md"
+        round1_files+=("$result_file")
+        round1_agent_types+=("$agent_type")
+
+        local agent_prompt="You are the ${role} specialist. Focus on: ${specialty}.
+
+${agent_prompt_base}"
+
+        spawn_agent "$agent_type" "$agent_prompt" "$task_id" "$role" "review" &
+    done <<< "$fleet"
+
+    # Wait for all Round 1 agents
+    wait
+    log INFO "review_run: Round 1 complete"
+
+    # Collect Round 1 findings — strip possible markdown fences from agent output
+    local all_findings="[]"
+    for f in "${round1_files[@]}"; do
+        [[ ! -f "$f" ]] && continue
+        local agent_findings
+        # Agent outputs ONLY JSON but strip any accidental markdown fences
+        agent_findings=$(sed 's/^```json[[:space:]]*//' "$f" 2>/dev/null | \
+            sed 's/^```[[:space:]]*//' | sed 's/```[[:space:]]*$//' | \
+            jq -r '.findings // []' 2>/dev/null || echo "[]")
+        all_findings=$(printf '%s\n%s' "$all_findings" "$agent_findings" | \
+            jq -s 'add' 2>/dev/null || echo "$all_findings")
+    done
+
+    # ── ROUND 2: Verification ─────────────────────────────────────────────────
+    log INFO "review_run: Round 2 — verification"
+    local verifier_prompt
+    verifier_prompt="You are a code review verifier. For each finding below, check whether it is a real bug (confirmed), a false positive, or needs debate (uncertain/conflicting).
+
+Return ONLY JSON: same findings array with an added 'verdict' field: confirmed|false-positive|needs-debate.
+Also add 'pre_existing_newly_reachable': true if a pre-existing finding becomes reachable via this PR changes.
+
+Diff:
+\`\`\`
+${diff_content}
+\`\`\`
+
+Findings to verify:
+$(echo "$all_findings" | jq -c '.')
+
+Return ONLY valid JSON with 'findings' array including verdict field."
+
+    local verified_findings
+    verified_findings=$(run_agent_sync "codex" "$verifier_prompt" 180 "code-reviewer" "review") || {
+        log WARN "review_run: codex verifier failed, falling back to claude-sonnet"
+        verified_findings=$(run_agent_sync "claude-sonnet" "$verifier_prompt" 180 "code-reviewer" "review") || {
+            log WARN "review_run: verification failed entirely, using all findings as confirmed"
+            verified_findings="{\"findings\":$(echo "$all_findings" | \
+                jq 'map(. + {"verdict":"confirmed"})' 2>/dev/null || echo "[]")}"
+        }
+    }
+
+    # Filter false positives
+    local confirmed_findings
+    confirmed_findings=$(echo "$verified_findings" | \
+        jq '.findings | map(select(.verdict != "false-positive"))' 2>/dev/null || \
+        echo "$all_findings")
+
+    # ── Debate gate (if enabled) ──────────────────────────────────────────────
+    if [[ "$debate" != "off" ]]; then
+        local debate_candidates
+        debate_candidates=$(echo "$confirmed_findings" | \
+            jq '[.[] | select(.verdict == "needs-debate")]' 2>/dev/null || echo "[]")
+        local debate_count
+        debate_count=$(echo "$debate_candidates" | jq 'length' 2>/dev/null || echo "0")
+        if [[ "$debate_count" -gt 0 ]]; then
+            log INFO "review_run: debating $debate_count contested findings"
+            local debate_prompt="Challenge these $debate_count contested code review findings. For each, state whether it is a real bug (include) or false positive (exclude). Be adversarial.
+Findings: $(echo "$debate_candidates" | jq -c '.')
+Return JSON: {\"include\": [...finding titles...], \"exclude\": [...finding titles...]}"
+            local debate_result
+            debate_result=$(run_agent_sync "codex" "$debate_prompt" 120 "code-reviewer" "review") || {
+                log WARN "review_run: debate agent failed, including all contested findings"
+                debate_result="{\"include\":[],\"exclude\":[]}"
+            }
+            local exclude_titles
+            exclude_titles=$(echo "$debate_result" | jq -r '.exclude // [] | .[]' 2>/dev/null || true)
+            if [[ -n "$exclude_titles" ]]; then
+                while IFS= read -r title; do
+                    confirmed_findings=$(echo "$confirmed_findings" | \
+                        jq --arg t "$title" '[.[] | select(.title != $t)]' 2>/dev/null || \
+                        echo "$confirmed_findings")
+                done <<< "$exclude_titles"
+            fi
+        fi
+    fi
+
+    # ── ROUND 3: Synthesis ────────────────────────────────────────────────────
+    log INFO "review_run: Round 3 — synthesis"
+    local synthesis_prompt
+    synthesis_prompt="Deduplicate and rank these code review findings by severity (normal first, then nit, then pre-existing). Merge duplicate findings (same bug from multiple agents) into one entry, preserving all agent perspectives in the detail field.
+
+Findings: $(echo "$confirmed_findings" | jq -c '.')
+
+Return ONLY JSON: {\"findings\": [...ranked, deduplicated findings...]}"
+
+    local final_json
+    final_json=$(run_agent_sync "claude-sonnet" "$synthesis_prompt" 120 "code-reviewer" "review") || {
+        log WARN "review_run: synthesis failed, using confirmed findings sorted as-is"
+        final_json="{\"findings\":$(echo "$confirmed_findings" | jq -c 'sort_by(.severity)' 2>/dev/null || echo "[]")}"
+    }
+
+    # Write findings file
+    echo "$final_json" > "$findings_file"
+    log INFO "review_run: findings saved to $findings_file"
+
+    # ── Output ────────────────────────────────────────────────────────────────
+    local pr_number=""
+    pr_number=$(gh pr view --json number -q .number 2>/dev/null || true)
+
+    if [[ -n "$pr_number" && "$publish" != "never" ]]; then
+        local avg_confidence
+        avg_confidence=$(jq '[.findings[].confidence] | if length > 0 then add/length else 0 end' \
+            "$findings_file" 2>/dev/null || echo "0")
+        if [[ "$publish" == "auto" ]] && awk "BEGIN{exit !($avg_confidence >= 0.85)}"; then
+            log INFO "review_run: auto-publishing to PR #$pr_number (confidence=$avg_confidence)"
+            post_inline_comments "$pr_number" "$findings_file" || render_terminal_report "$findings_file"
+        elif [[ "$publish" == "ask" ]]; then
+            render_terminal_report "$findings_file"
+            echo ""
+            echo "PR #$pr_number is open. Post findings as inline comments? (y/N)"
+            read -r response
+            [[ "$response" =~ ^[Yy] ]] && { post_inline_comments "$pr_number" "$findings_file" || render_terminal_report "$findings_file"; }
+        fi
+    else
+        render_terminal_report "$findings_file"
+    fi
+}
+
+# post_inline_comments: posts findings as inline PR comments via gh API
+# WHY: inline line-level comments match CC Code Review UX exactly.
+post_inline_comments() {
+    local pr_number="$1"
+    local findings_file="$2"
+
+    local repo=""
+    repo=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)
+    if [[ -z "$repo" ]]; then
+        log ERROR "post_inline_comments: could not determine repo (is gh auth configured?)"
+        render_terminal_report "$findings_file"
+        return 1
+    fi
+
+    local commit_id=""
+    commit_id=$(gh pr view "$pr_number" --json headRefOid -q .headRefOid 2>/dev/null || true)
+
+    if [[ -z "$commit_id" ]]; then
+        log WARN "post_inline_comments: could not determine commit SHA for PR #$pr_number — posting summary comment only"
+        local summary
+        summary=$(render_review_summary "$findings_file")
+        gh pr review "$pr_number" --comment --body "$summary" 2>/dev/null || true
+        return 0
+    fi
+
+    local summary
+    summary=$(render_review_summary "$findings_file")
+    gh pr review "$pr_number" --comment --body "$summary" 2>/dev/null || true
+
+    local finding_count
+    finding_count=$(jq '.findings | length' "$findings_file" 2>/dev/null || echo "0")
+    log INFO "post_inline_comments: posting $finding_count inline comments to PR #$pr_number"
+
+    jq -c '.findings[]' "$findings_file" 2>/dev/null | while IFS= read -r finding; do
+        local file line severity title detail
+        file=$(echo "$finding"     | jq -r '.file')
+        line=$(echo "$finding"     | jq -r '.line')
+        severity=$(echo "$finding" | jq -r '.severity')
+        title=$(echo "$finding"    | jq -r '.title')
+        detail=$(echo "$finding"   | jq -r '.detail')
+
+        local icon
+        case "$severity" in
+            normal)       icon="[NORMAL]" ;;
+            nit)          icon="[NIT]" ;;
+            pre-existing) icon="[PRE-EXISTING]" ;;
+            *)            icon="[INFO]" ;;
+        esac
+
+        local body="${icon} **${title}**
+
+${detail}
+
+_Reviewed by /octo:review (multi-LLM fleet)_"
+
+        gh api "repos/${repo}/pulls/${pr_number}/comments" \
+            --method POST \
+            -f body="$body" \
+            -f commit_id="$commit_id" \
+            -f path="$file" \
+            -F line="$line" \
+            -f side="RIGHT" 2>/dev/null || \
+        log WARN "post_inline_comments: failed to post comment on $file:$line"
+    done
+}
+
+# render_terminal_report: formats findings for terminal display
+render_terminal_report() {
+    local findings_file="$1"
+
+    local finding_count
+    finding_count=$(jq '.findings | length' "$findings_file" 2>/dev/null || echo "0")
+
+    echo ""
+    echo "+-----------------------------------------------------------------+"
+    echo "|  /octo:review - Multi-LLM Code Review Results                  |"
+    echo "+-----------------------------------------------------------------+"
+    echo ""
+
+    if [[ "$finding_count" -eq 0 ]]; then
+        echo "No issues found."
+        return 0
+    fi
+
+    echo "Found $finding_count issue(s):"
+    echo ""
+
+    jq -c '.findings[]' "$findings_file" 2>/dev/null | while IFS= read -r finding; do
+        local severity title file line detail
+        severity=$(echo "$finding" | jq -r '.severity')
+        title=$(echo "$finding"    | jq -r '.title')
+        file=$(echo "$finding"     | jq -r '.file')
+        line=$(echo "$finding"     | jq -r '.line')
+        detail=$(echo "$finding"   | jq -r '.detail')
+
+        local icon
+        case "$severity" in
+            normal)       icon="[NORMAL]" ;;
+            nit)          icon="[NIT]" ;;
+            pre-existing) icon="[PRE-EXISTING]" ;;
+            *)            icon="[INFO]" ;;
+        esac
+
+        echo "${icon} ${title}"
+        echo "   ${file}:${line}"
+        echo "   ${detail}"
+        echo ""
+    done
+}
+
+# render_review_summary: short markdown summary for PR-level comment
+render_review_summary() {
+    local findings_file="$1"
+    local normal_count nit_count preexisting_count
+    normal_count=$(jq '[.findings[] | select(.severity=="normal")] | length' "$findings_file" 2>/dev/null || echo "0")
+    nit_count=$(jq '[.findings[] | select(.severity=="nit")] | length' "$findings_file" 2>/dev/null || echo "0")
+    preexisting_count=$(jq '[.findings[] | select(.severity=="pre-existing")] | length' "$findings_file" 2>/dev/null || echo "0")
+
+    echo "## /octo:review - Multi-LLM Code Review"
+    echo ""
+    echo "| Severity | Count |"
+    echo "|----------|-------|"
+    echo "| Normal | $normal_count |"
+    echo "| Nit | $nit_count |"
+    echo "| Pre-existing | $preexisting_count |"
+    echo ""
+    echo "_Reviewed by Codex + Gemini + Claude + Perplexity fleet_"
+    echo "_See inline comments for details_"
+}
+
 # Approve a review
 approve_review() {
     local review_id="$1"
@@ -20668,6 +21104,16 @@ case "$COMMAND" in
             exit 1
         fi
         ink_deliver "$1" "${2:-}"
+        ;;
+    code-review)
+        # Multi-LLM code review pipeline — competitor to CC Code Review
+        if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+            echo "Usage: $(basename "$0") code-review '<json-profile>'"
+            echo "Profile fields: target, focus, provenance, autonomy, publish, debate"
+            echo "Example: $(basename "$0") code-review '{\"target\":\"staged\",\"publish\":\"ask\"}'"
+            exit 0
+        fi
+        review_run "${1:-{}}"
         ;;
     embrace)
         # Full 4-phase Double Diamond workflow

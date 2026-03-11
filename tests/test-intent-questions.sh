@@ -162,12 +162,12 @@ fi
 echo ""
 echo "Test 9: Checking review.md specific questions..."
 review_path="$COMMANDS_DIR/review.md"
-if grep -q "goal" "$review_path" && \
-   grep -q "priority" "$review_path" && \
-   grep -q "audience" "$review_path"; then
-    pass "review.md has appropriate question topics (goal, priority, audience)"
+if grep -q "Target\|target\|staged\|provenance\|Provenance" "$review_path" && \
+   grep -q "Focus\|focus\|correctness\|security" "$review_path" && \
+   grep -q "Publish\|publish\|inline\|PR" "$review_path"; then
+    pass "review.md has appropriate question topics (target, focus, publish)"
 else
-    fail "review.md missing expected question topics" "Should ask about goal, priority, and audience"
+    fail "review.md missing expected question topics" "Should ask about target, focus, and publish"
 fi
 
 # Test 10: Verify security.md has specific questions

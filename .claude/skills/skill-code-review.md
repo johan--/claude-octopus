@@ -34,6 +34,8 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/orchestrate.sh auto "review the authentication imp
 - Security vulnerability detection
 - Performance optimization suggestions
 - Architecture and design pattern review
+- TDD compliance and test-first evidence review
+- Autonomous code generation risk detection
 - Best practices enforcement
 
 ## Persona Reference
@@ -51,6 +53,45 @@ This skill wraps the `code-reviewer` persona defined in:
 "Analyze the error handling in src/api/"
 "Check for memory leaks in the connection pool"
 "Review the test coverage for the auth module"
+```
+
+---
+
+## Autonomous Implementation Review
+
+When the review context indicates `AI-assisted`, `Autonomous / Dark Factory`, or unclear provenance, raise the rigor bar. Do not treat generated code as trustworthy just because it is polished.
+
+### TDD Evidence
+
+Check for concrete signs that the change followed red-green-refactor rather than test-after implementation:
+
+- Compare the diff and recent history when available to see whether tests were added before or alongside production changes.
+- Prefer behavior-defining tests over snapshot-only or mock-heavy tests that merely restate the implementation.
+- Verify the production code looks like the minimum needed to satisfy the tests, rather than a speculative abstraction with unused options.
+- If evidence is missing, mark TDD compliance as unknown and do not assume TDD happened.
+
+### Autonomous Codegen Risk Patterns
+
+Elevate or add findings when you see patterns common in high-autonomy output:
+
+- Option-heavy APIs or abstractions not justified by tests or current requirements
+- Placeholder logic, TODO/FIXME-driven control flow, or dead branches that appear "future ready"
+- Mock, fake, or dummy behavior leaking into production paths
+- Unwired components, unused helpers, or code that exists without an execution path
+- Silent failure handling, broad catch blocks, missing logs, or weak operational visibility
+- Missing rollback notes, migration guards, or release-safety checks for risky changes
+
+### Review Output Addendum
+
+Add a short section to the review synthesis when autonomy or TDD is in scope:
+
+```markdown
+## TDD / Autonomy Assessment
+
+- Provenance: Human-authored | AI-assisted | Autonomous / Dark Factory | Unknown
+- TDD evidence: Confirmed | Partial | Unknown
+- Autonomous risk signals: None | Minor | Significant
+- Recommendation: Ship | Fix before merge | Re-run with /octo:tdd or tighter supervision
 ```
 
 ---

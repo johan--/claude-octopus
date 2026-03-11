@@ -1,151 +1,134 @@
 ---
 command: review
-description: Expert code review with comprehensive quality assessment and security analysis
+description: Expert multi-LLM code review with inline PR comments — competes with CC Code Review
 ---
 
-# Review - Code Quality Assessment
+# /octo:review
 
-## 🤖 INSTRUCTIONS FOR CLAUDE
+🐙 **CLAUDE OCTOPUS ACTIVATED** — Multi-LLM Code Review
 
-### MANDATORY COMPLIANCE — DO NOT SKIP
-
-**When the user explicitly invokes `/octo:review`, you MUST execute the structured review workflow below.** You are PROHIBITED from doing a quick review directly, skipping the clarifying questions, or deciding the task is "too simple" for this workflow. The user chose this command deliberately — respect that choice.
+Providers:
+🔴 Codex CLI — logic and correctness
+🟡 Gemini CLI — security and edge cases
+🔵 Claude — architecture and synthesis
+🟣 Perplexity — CVE lookup (if available)
 
 ---
 
 When the user invokes this command (e.g., `/octo:review <arguments>`):
 
-### Step 1: Ask Clarifying Questions
+## Step 1: Ask Clarifying Questions / Context Acquisition
 
-**CRITICAL: Before starting the review, use the AskUserQuestion tool to gather context:**
+**Determine mode based on session autonomy:**
 
-Ask 3 clarifying questions to ensure focused review:
+If `AUTONOMY_MODE` env var is `autonomous` or session is running headlessly, skip Q&A and auto-infer:
+1. Run `git diff --cached` — if non-empty, `target=staged`
+2. Run `gh pr view --json number` — if open PR exists, set `target=<pr_number>`
+3. Otherwise `target=working-tree`
+4. Set `provenance=unknown`, `autonomy=autonomous`, `publish=ask`, `debate=auto`
+
+**Otherwise (supervised mode), use AskUserQuestion:**
 
 ```javascript
 AskUserQuestion({
   questions: [
     {
-      question: "What's the primary goal of this review?",
-      header: "Goal",
+      question: "What should be reviewed?",
+      header: "Target",
       multiSelect: false,
       options: [
-        {label: "Pre-commit check", description: "Quick review before committing"},
-        {label: "Security focus", description: "Deep security vulnerability analysis"},
-        {label: "Performance optimization", description: "Identify bottlenecks and improvements"},
-        {label: "Architecture assessment", description: "Design patterns and structure review"}
+        {label: "Staged changes", description: "git diff --cached — what you're about to commit"},
+        {label: "Open PR", description: "Review the current branch's open pull request"},
+        {label: "Working tree", description: "All uncommitted changes"},
+        {label: "Specific path", description: "A file or directory"}
       ]
     },
     {
-      question: "What are your priority concerns?",
-      header: "Priority",
+      question: "What should the fleet focus on?",
+      header: "Focus",
       multiSelect: true,
       options: [
-        {label: "Security vulnerabilities", description: "OWASP, authentication, data protection"},
-        {label: "Performance issues", description: "Speed, efficiency, scalability"},
-        {label: "Code maintainability", description: "Readability, complexity, structure"},
-        {label: "Test coverage", description: "Testing adequacy and quality"}
+        {label: "Correctness", description: "Logic bugs, edge cases, regressions"},
+        {label: "Security & Edge Cases", description: "OWASP, race conditions, partial failures"},
+        {label: "Architecture", description: "API contracts, integration, breaking changes"},
+        {label: "TDD discipline", description: "Verify failing-test-first evidence and minimal implementation"}
       ]
     },
     {
-      question: "Who is the audience for this review?",
-      header: "Audience",
+      question: "How was this code produced?",
+      header: "Provenance",
       multiSelect: false,
       options: [
-        {label: "Just me", description: "Personal learning and improvement"},
-        {label: "Team review", description: "Preparing for team code review"},
-        {label: "Production release", description: "Pre-deployment quality gate"},
-        {label: "External audit", description: "Client or compliance review"}
+        {label: "Human-authored", description: "Standard review"},
+        {label: "AI-assisted", description: "Review for over-abstraction and weak tests"},
+        {label: "Autonomous / Dark Factory", description: "Elevated rigor: verify tests, wiring, operational safety"},
+        {label: "Unknown", description: "Assume less context, verify from code and tests"}
       ]
     },
     {
-      question: "Should contentious findings be validated with a Multi-LLM debate? (Claude + Codex + Gemini weigh in)",
-      header: "Multi-LLM Debate",
+      question: "Should findings be posted to the open PR?",
+      header: "Publish",
       multiSelect: false,
       options: [
-        {label: "No — Claude-only review", description: "Single-model review (fastest, no external API costs)"},
-        {label: "Yes — Multi-LLM debate on architecture decisions", description: "Claude, Codex, and Gemini debate design trade-offs (uses external API credits)"},
-        {label: "Yes — Multi-LLM debate on all high-severity findings", description: "Three-model deliberation on any critical/high findings"},
-        {label: "Auto — Multi-LLM debate if disagreement detected", description: "Only trigger three-model debate when providers would likely disagree"}
+        {label: "Ask me after review", description: "Show findings first, then decide"},
+        {label: "Auto-post if confident", description: "Post inline comments when confidence ≥ 85%"},
+        {label: "Never — terminal only", description: "Always show in terminal, never post to PR"}
       ]
     }
   ]
 })
 ```
 
-**After receiving answers, incorporate them into the review focus and depth.**
+## Step 2: Build Review Profile
 
-### Step 2: Execute Review with Skill Tool
+After receiving answers, map them to a JSON profile:
 
-**✓ CORRECT - Use the Skill tool:**
-```
-Skill(skill: "octo:review", args: "<user's arguments + context>")
-```
-
-**✗ INCORRECT - Do NOT use Task tool:**
-```
-Task(subagent_type: "octo:review", ...)  ❌ Wrong! This is a skill, not an agent type
-```
-
-**Why:** This command loads the `skill-code-review` skill. Skills use the `Skill` tool, not `Task`.
-
----
-
-### Step 3: Post-Review Debate (if enabled)
-
-**If the user selected a debate mode in Step 1:**
-
-After the code review skill completes and produces findings:
-
-1. **"Debate architecture decisions"**: Extract architecture-related findings and invoke:
-   ```
-   /octo:debate --rounds 1 --debate-style collaborative "Review these architecture concerns: [findings]. Are they valid? What alternatives exist?"
-   ```
-
-2. **"Debate all high-severity findings"**: Extract critical/high findings and invoke:
-   ```
-   /octo:debate --rounds 2 --debate-style adversarial "Challenge these review findings: [findings]. Which are real risks vs false positives?"
-   ```
-
-3. **"Auto — debate if disagreement detected"**: After review, check if findings conflict
-   with the code's apparent intent. If tension exists, trigger a 1-round quick debate.
-
-4. **Present combined results**: Show the original review findings alongside debate synthesis,
-   highlighting where the debate confirmed, overturned, or nuanced the original findings.
-
----
-
-**Auto-loads the `skill-code-review` skill for comprehensive code review.**
-
-## Quick Usage
-
-Just use natural language:
-```
-"Review my authentication code for security issues"
-"Code review the API endpoints in src/api/"
-"Review this PR for quality and performance"
+```javascript
+const profile = {
+  target: <from answer or inference>,  // "staged" | "working-tree" | PR# | path
+  focus: <multi-select answers as array>,
+  provenance: <answer>,                // "human" | "ai-assisted" | "autonomous" | "unknown"
+  autonomy: <detected mode>,           // "supervised" | "autonomous"
+  publish: <answer>,                   // "ask" | "auto" | "never"
+  debate: "auto"                       // always default to auto debate
+}
 ```
 
-## What Gets Reviewed
+## Step 3: Execute Review Pipeline
 
-- Code quality and style
-- Security vulnerabilities (OWASP Top 10)
-- Performance issues and optimizations
-- Architecture and design patterns
-- Test coverage and quality
-- Error handling and edge cases
+Run via Bash tool:
 
-## Review Types
-
-- **Quick Review**: Pre-commit checks (use `/octo:quick-review` or just say "quick review")
-- **Full Review**: Comprehensive analysis with security audit
-- **Security Focus**: Deep security and vulnerability assessment
-
-## Natural Language Examples
-
-```
-"Review the auth module for security vulnerabilities"
-"Quick review of my changes before I commit"
-"Comprehensive code review of the payment processing code"
+```bash
+/path/to/orchestrate.sh code-review '<profile-json>'
 ```
 
-The skill will automatically analyze your code and provide detailed feedback with specific recommendations.
+Where `<profile-json>` is the JSON profile built in Step 2.
+
+The pipeline runs 3 rounds (parallel fleet → verification → synthesis) and outputs findings. If a PR is open and publish is not "never", it offers to post inline comments.
+
+## What `/octo:review` checks
+
+- Correctness: logic bugs, edge cases, regressions, unreachable code
+- Security: OWASP Top 10, injection, auth flaws, data exposure (Gemini specialist)
+- Architecture: API contracts, integration issues, breaking changes (Claude specialist)
+- CVE lookup: known vulnerabilities in dependencies (Perplexity → Gemini → Claude WebSearch)
+- TDD compliance and test-first evidence (when provenance is AI-assisted/autonomous)
+- Autonomous codegen risk: placeholder logic, unwired code, speculative abstractions
+
+## REVIEW.md support
+
+Add a `REVIEW.md` file to your repository root to guide what `/octo:review` flags.
+Drop-in compatible with Claude Code's managed Code Review service.
+
+```markdown
+# Code Review Guidelines
+
+## Always check
+- New API endpoints have corresponding integration tests
+
+## Style
+- Prefer early returns over nested conditionals
+
+## Skip
+- Generated files under src/gen/
+```

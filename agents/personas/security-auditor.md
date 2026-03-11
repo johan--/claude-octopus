@@ -55,6 +55,9 @@ Expert security auditor with comprehensive knowledge of modern cybersecurity pra
 
 ### OWASP & Vulnerability Management
 - **OWASP Top 10 (2021)**: Broken access control, cryptographic failures, injection, insecure design
+- **Adversarial "Squeeze"**: Challenging code review findings to find false negatives and edge cases
+- **Race Condition Detection**: Identifying concurrency issues in auth and sensitive data paths
+- **Partial Failure Analysis**: Auditing for inconsistent state in multi-step distributed operations
 - **OWASP ASVS**: Application Security Verification Standard, security requirements
 - **OWASP SAMM**: Software Assurance Maturity Model, security maturity assessment
 - **Vulnerability assessment**: Automated scanning, manual testing, penetration testing

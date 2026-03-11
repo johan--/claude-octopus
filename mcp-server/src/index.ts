@@ -259,15 +259,44 @@ server.tool(
 
 server.tool(
   "octopus_review",
-  "Run expert code review with multi-provider analysis (security, performance, architecture).",
+  "Run multi-LLM code review pipeline (Codex + Gemini + Claude + Perplexity fleet). Loads REVIEW.md customization if present. Supports inline PR comment publishing.",
   {
     target: z
       .string()
-      .describe("File path, directory, or description of what to review"),
+      .optional()
+      .describe("What to review: 'staged' (default), 'working-tree', a PR number, or a file path"),
+    focus: z
+      .array(z.enum(["correctness", "security", "performance", "architecture", "style", "tests"]))
+      .optional()
+      .describe("Review focus areas (default: correctness)"),
+    provenance: z
+      .enum(["human-authored", "ai-assisted", "autonomous", "unknown"])
+      .optional()
+      .describe("How the code was produced — triggers elevated rigor for AI/autonomous output"),
+    autonomy: z
+      .enum(["supervised", "semi-autonomous", "autonomous"])
+      .optional()
+      .describe("Review autonomy level (default: supervised)"),
+    publish: z
+      .enum(["ask", "auto", "never"])
+      .optional()
+      .describe("Whether to post findings as inline PR comments (default: ask)"),
+    debate: z
+      .enum(["auto", "on", "off"])
+      .optional()
+      .describe("Whether to debate contested findings via multi-LLM gate (default: auto)"),
   },
-  async ({ target }) => {
-    // orchestrate.sh uses "codex-review" for code review
-    const { text, isError } = await runOrchestrate("codex-review", target);
+  async ({ target, focus, provenance, autonomy, publish, debate }) => {
+    // Build JSON profile and dispatch to review_run() via code-review command
+    const profile = JSON.stringify({
+      target: target ?? "staged",
+      focus: focus ?? ["correctness"],
+      provenance: provenance ?? "unknown",
+      autonomy: autonomy ?? "supervised",
+      publish: publish ?? "ask",
+      debate: debate ?? "auto",
+    });
+    const { text, isError } = await runOrchestrate("code-review", profile);
     return { content: [{ type: "text" as const, text }], isError };
   }
 );

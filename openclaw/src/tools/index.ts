@@ -94,7 +94,7 @@ export const SKILL_REGISTRY: SkillRegistryEntry[] = [
   { name: "prd", description: "Write an AI-optimized PRD using multi-AI orchestration and 100-point scoring framework", type: "command", file: "prd.md" },
   { name: "quick", description: "Quick execution mode for ad-hoc tasks without full workflow overhead", type: "command", file: "quick.md" },
   { name: "research", description: "Deep research with multi-source synthesis and comprehensive analysis", type: "command", file: "research.md" },
-  { name: "review", description: "Expert code review with comprehensive quality assessment and security analysis", type: "command", file: "review.md" },
+  { name: "review", description: "Expert multi-LLM code review with inline PR comments — competes with CC Code Review", type: "command", file: "review.md" },
   { name: "schedule", description: "Manage scheduled workflow jobs (add via wizard, dashboard, list, remove, enable, disable, logs)", type: "command", file: "schedule.md" },
   { name: "scheduler", description: "Manage the scheduled workflow runner daemon (start/stop/status)", type: "command", file: "scheduler.md" },
   { name: "security", description: "Security audit with OWASP compliance and vulnerability detection", type: "command", file: "security.md" },
