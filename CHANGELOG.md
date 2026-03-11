@@ -1,3 +1,11 @@
+## [8.50.0] - 2026-03-11
+
+### Changed
+
+- Multi-LLM /octo:review — 3-round parallel fleet (Codex + Gemini + Claude + Perplexity), inline PR comments, REVIEW.md support, verified findings
+
+---
+
 ## [8.49.1] - 2026-03-10
 
 ### Changed
